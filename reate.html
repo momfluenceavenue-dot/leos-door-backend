@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Your Book — Leo's Door</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Nunito', sans-serif; }
+  @keyframes twinkle { from { opacity: 0.2; } to { opacity: 1; } }
+  @keyframes float { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+  @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+  @keyframes doorGlow { 0%,100% { box-shadow: 0 0 20px rgba(212,160,23,0.4); } 50% { box-shadow: 0 0 40px rgba(212,160,23,0.7); } }
+  @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes confetti { 0% { transform: translateY(-10px) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(360deg); opacity: 0; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+const CONFIG = {
+  STRIPE_PK: 'pk_test_51TiHLs2LnMY1EKvXGRH73FfBhdLR0Sp6BvcSUUC8jA46rgVkBGWOkRfnewNe8kg8nhTKmCYjBZT95jCJERtlnr5K00RnF4PRWs',
+  BACKEND_URL: 'https://leos-door-backend-94r6.vercel.app',
+  PRICE_CENTS: 3999,
+  PRICE_DISPLAY: '$39.99',
+};
+
+const stripePromise = window.Stripe(CONFIG.STRIPE_PK);
+
+const inputStyle = {
+  background: "rgba(255,255,255,0.08)",
+  border: "2px solid rgba(212,160,23,0.5)",
+  borderRadius: 12, padding: "12px 14px",
+  fontSize: 15, fontFamily: "'Nunito', sans-serif",
+  color: "#fff", outline: "none", width: "100%", boxSizing: "border-box",
+};
+
+const ROOMS = [
+  { id: "jungle", label: "Jungle Kingdom", emoji: "🐒", color: "#1B6B3A", desc: "Leap through the treetops with tigers." },
+  { id: "undersea", label: "Under the Sea", emoji: "🐠", color: "#1A5276", desc: "Command the waves and swim with fish." },
+  { id: "carnival", label: "Magical Carnival", emoji: "🎡", color: "#C0392B", desc: "Slides, cotton candy, and a ringmaster." },
+  { id: "space", label: "Outer Space", emoji: "🚀", color: "#0D0D2B", desc: "Rocket through the galaxy past planets." },
+  { id: "kingdom", label: "Magic Kingdom", emoji: "🏰", color: "#6C3483", desc: "Knights, dragons, and glowing smoke." },
+  { id: "rainforest", label: "Rainforest", emoji: "🦋", color: "#2E7D32", desc: "Butterflies land on your fingers." },
+  { id: "princess", label: "Princess Palace", emoji: "👑", color: "#C2185B", desc: "Towers of rose and starlit crowns." },
+  { id: "candy", label: "Candy Wonderland", emoji: "🍭", color: "#7B1FA2", desc: "Clouds made of cotton candy." },
+  { id: "toys", label: "Land of Living Toys", emoji: "🧸", color: "#E65100", desc: "Every toy comes alive." },
+  { id: "japan", label: "Japan", emoji: "🎏", color: "#B71C1C", desc: "Cherry blossoms and red lanterns." },
+  { id: "paris", label: "Paris, France", emoji: "🗼", color: "#1A237E", desc: "The sparkling Eiffel Tower winks at you." },
+  { id: "africa", label: "African Savanna", emoji: "🦁", color: "#E65100", desc: "Lions, elephants, and golden grass." },
+  { id: "india", label: "India", emoji: "🎆", color: "#880E4F", desc: "Color, fireworks, and a baby elephant." },
+  { id: "brazil", label: "Amazon, Brazil", emoji: "🦜", color: "#1B5E20", desc: "Pink dolphins and a rainbow-beaked toucan." },
+];
+
+const POWERS = [
+  { id: "fly", label: "You can FLY!", emoji: "🕊️", color: "#1565C0" },
+  { id: "breathe", label: "Breathe underwater", emoji: "🫧", color: "#006064" },
+  { id: "talk", label: "Talk to animals", emoji: "🐾", color: "#33691E" },
+  { id: "speed", label: "Run super fast", emoji: "⚡", color: "#F57F17" },
+  { id: "grow", label: "Grow giant or tiny", emoji: "🌱", color: "#2E7D32" },
+  { id: "glow", label: "Glow like a star", emoji: "✨", color: "#6A1B9A" },
+  { id: "heal", label: "Heal with a hug", emoji: "💛", color: "#E65100" },
+  { id: "magic", label: "Cast any spell", emoji: "🪄", color: "#4A148C" },
+];
+
+const STEPS = ["welcome", "name", "rooms", "power", "review", "checkout", "done"];
+
+const ROOM_TEXT = {
+  jungle: (n) => `${n} leaps from tree to tree! Tigers run alongside, roaring with joy.`,
+  undersea: (n) => `${n} stretches out both hands and the waves obey! Fish of every color circle by.`,
+  carnival: (n) => `The carousel spins! Cotton candy floats past like pink clouds!`,
+  space: (n) => `3... 2... 1... blast off! ${n} rockets through the galaxy, zooming past planets.`,
+  kingdom: (n) => `Knights bow to ${n}! Dragons breathe purple smoke that smells like birthday cake.`,
+  rainforest: (n) => `Butterflies land on ${n}'s fingers. Warm rain falls soft as a whisper.`,
+  princess: (n) => `A crown made of stars settles on ${n}'s head. Rose towers glow at dusk.`,
+  candy: (n) => `Snow falls in flavors of strawberry and mint! The clouds are made of cotton candy.`,
+  toys: (n) => `Every toy comes alive at once! Teddy bears hug ${n}.`,
+  japan: (n) => `Cherry blossoms swirl around ${n}. A red fox bows its head.`,
+  paris: (n) => `The Eiffel Tower winks at ${n}! A little mouse hands over a warm croissant.`,
+  africa: (n) => `A lion cub runs up and licks ${n}'s hand! Elephants wave their trunks.`,
+  india: (n) => `Color everywhere! A baby elephant bows and ${n} climbs aboard.`,
+  brazil: (n) => `A toucan with a rainbow beak lands on ${n}'s shoulder and off they fly!`,
+};
+
+const starField = Array.from({ length: 40 }, (_, i) => ({
+  id: i, x: Math.random() * 100, y: Math.random() * 100,
+  size: Math.random() * 3 + 1, delay: Math.random() * 3,
+}));
+
+function StarBg() {
+  return (
+    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
+      {starField.map(s => (
+        <div key={s.id} style={{
+          position: "absolute", left: `${s.x}%`, top: `${s.y}%`,
+          width: s.size, height: s.size, borderRadius: "50%",
+          background: "rgba(255,255,255,0.6)",
+          animation: `twinkle 3s ease-in-out ${s.delay}s infinite alternate`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function MagicBtn({ onClick, children, color = "#D4A017", disabled = false, big = false }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: disabled ? "#555" : `linear-gradient(135deg, ${color}, ${color}dd)`,
+      color: "#fff", border: "none", borderRadius: 50,
+      padding: big ? "18px 48px" : "12px 32px",
+      fontSize: big ? 22 : 17,
+      fontFamily: "'Fredoka One', cursive",
+      cursor: disabled ? "not-allowed" : "pointer",
+      boxShadow: disabled ? "none" : `0 6px 24px ${color}66`,
+      transition: "transform 0.15s, box-shadow 0.15s",
+      letterSpacing: 0.5,
+      animation: disabled ? "none" : "float 3s ease-in-out infinite",
+    }}>
+      {children}
+    </button>
+  );
+}
+
+function ProgressDots({ step }) {
+  const idx = STEPS.indexOf(step);
+  const total = STEPS.length - 1;
+  return (
+    <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 24 }}>
+      {Array.from({ length: total }).map((_, i) => (
+        <div key={i} style={{
+          width: i < idx ? 24 : 12, height: 12, borderRadius: 8,
+          background: i < idx ? "#D4A017" : i === idx ? "#fff" : "rgba(255,255,255,0.25)",
+          transition: "all 0.4s",
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function Card({ children, glow }) {
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.06)", backdropFilter: "blur(10px)",
+      borderRadius: 28, padding: "36px 28px",
+      border: glow ? "2px solid rgba(212,160,23,0.5)" : "1px solid rgba(255,255,255,0.15)",
+      boxShadow: glow ? "0 0 40px rgba(212,160,23,0.15)" : "0 20px 60px rgba(0,0,0,0.4)",
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  const [step, setStep] = useState("welcome");
+  const [name, setName] = useState("");
+  const [selectedRooms, setSelectedRooms] = useState([]);
+  const [power, setPower] = useState(null);
+  const [confetti, setConfetti] = useState([]);
+
+  const [shipping, setShipping] = useState({
+    firstName: "", lastName: "", email: "",
+    addressLine1: "", addressLine2: "", city: "", state: "", postCode: "", country: "US",
+  });
+  const [clientSecret, setClientSecret] = useState(null);
+  const [paymentElement, setPaymentElement] = useState(null);
+  const elementsRef = useRef(null);
+  const paymentDivRef = useRef(null);
+  const [orderStatus, setOrderStatus] = useState("idle");
+  const [orderError, setOrderError] = useState("");
+  const [gelatoOrderId, setGelatoOrderId] = useState(null);
+
+  const toggleRoom = (id) => {
+    setSelectedRooms(prev =>
+      prev.includes(id) ? prev.filter(r => r !== id) : (prev.length < 6 ? [...prev, id] : prev)
+    );
+  };
+
+  const launchConfetti = () => {
+    const pieces = Array.from({ length: 30 }, (_, i) => ({
+      id: i, x: Math.random() * 100,
+      color: ["#D4A017", "#C0392B", "#1B6B3A", "#6C3483", "#1A5276"][i % 5],
+      delay: Math.random() * 1.5, dur: 2 + Math.random() * 2,
+    }));
+    setConfetti(pieces);
+    setTimeout(() => setConfetti([]), 5000);
+  };
+
+  const goToCheckout = () => {
+    launchConfetti();
+    setStep("checkout");
+  };
+
+  useEffect(() => {
+    if (step !== "checkout" || clientSecret) return;
+
+    fetch(`${CONFIG.BACKEND_URL}/create-payment-intent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: CONFIG.PRICE_CENTS,
+        currency: "usd",
+        metadata: { childName: name, rooms: selectedRooms.join(","), power: power || "" },
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.clientSecret) setClientSecret(data.clientSecret);
+        else setOrderError(data.error || "Could not start payment.");
+      })
+      .catch(err => setOrderError(err.message));
+  }, [step]);
+
+  useEffect(() => {
+    if (!clientSecret || !paymentDivRef.current || paymentElement) return;
+    const elements = stripePromise.elements({ clientSecret });
+    const pe = elements.create("payment");
+    pe.mount(paymentDivRef.current);
+    elementsRef.current = elements;
+    setPaymentElement(pe);
+  }, [clientSecret]);
+
+  const generateBookPdf = () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "pt", format: [420, 420] });
+
+    doc.setFillColor(26, 10, 46);
+    doc.rect(0, 0, 420, 420, "F");
+    doc.setTextColor(212, 160, 23);
+    doc.setFontSize(32);
+    doc.text(`${name}'s Door`, 210, 180, { align: "center" });
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.text("A magical adventure starring", 210, 220, { align: "center" });
+    doc.text(name, 210, 240, { align: "center" });
+
+    bookPreview.forEach((page) => {
+      doc.addPage([420, 420]);
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, 420, 420, "F");
+      doc.setTextColor(40, 30, 20);
+      doc.setFontSize(16);
+      doc.text(page.room.label, 210, 60, { align: "center" });
+      doc.setFontSize(13);
+      const lines = doc.splitTextToSize(page.text, 340);
+      doc.text(lines, 210, 120, { align: "center" });
+    });
+
+    if (selectedPowerData) {
+      doc.addPage([420, 420]);
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, 420, 420, "F");
+      doc.setTextColor(40, 30, 20);
+      doc.setFontSize(16);
+      doc.text(`${name}'s Superpower`, 210, 180, { align: "center" });
+      doc.setFontSize(14);
+      doc.text(selectedPowerData.label, 210, 210, { align: "center" });
+    }
+
+    return doc.output("blob");
+  };
+
+  const handlePay = async () => {
+    setOrderStatus("processing");
+    setOrderError("");
+
+    if (!shipping.firstName || !shipping.lastName || !shipping.email || !shipping.addressLine1 || !shipping.city || !shipping.state || !shipping.postCode) {
+      setOrderStatus("error");
+      setOrderError("Please fill in all shipping fields before paying.");
+      return;
+    }
+
+    try {
+      const { error: stripeError, paymentIntent } = await stripePromise.confirmPayment({
+        elements: elementsRef.current,
+        redirect: "if_required",
+        confirmParams: {
+          payment_method_data: {
+            billing_details: {
+              name: `${shipping.firstName} ${shipping.lastName}`,
+              email: shipping.email,
+            },
+          },
+        },
+      });
+
+      if (stripeError) {
+        setOrderStatus("error");
+        setOrderError(stripeError.message);
+        return;
+      }
+
+      const pdfBlob = generateBookPdf();
+      const formData = new FormData();
+      formData.append("file", pdfBlob, `${name}-door.pdf`);
+
+      const uploadRes = await fetch(`${CONFIG.BACKEND_URL}/upload-pdf`, {
+        method: "POST",
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadData.pdfUrl) throw new Error(uploadData.error || "PDF upload failed.");
+
+      const orderRes = await fetch(`${CONFIG.BACKEND_URL}/submit-gelato-order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderReferenceId: paymentIntent.id,
+          customerReferenceId: shipping.email,
+          paymentId: paymentIntent.id,
+          childName: name,
+          rooms: selectedRooms,
+          power: selectedPowerData ? selectedPowerData.label : "",
+          pdfUrl: uploadData.pdfUrl,
+          shippingAddress: shipping,
+        }),
+      });
+      const orderData = await orderRes.json();
+      if (!orderData.success) throw new Error(orderData.error || "Order submission failed.");
+
+      setGelatoOrderId(orderData.gelatoOrderId);
+      setOrderStatus("idle");
+      launchConfetti();
+      setStep("done");
+    } catch (err) {
+      setOrderStatus("error");
+      setOrderError(err.message);
+    }
+  };
+
+  const selectedRoomData = ROOMS.filter(r => selectedRooms.includes(r.id));
+  const selectedPowerData = POWERS.find(p => p.id === power);
+  const bookPreview = selectedRoomData.map((room, i) => ({
+    room,
+    text: (ROOM_TEXT[room.id] ? ROOM_TEXT[room.id](name) : `${name} discovers something magical here!`),
+    pageNum: i + 1,
+  }));
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(160deg, #0a0a1a 0%, #1a0a2e 40%, #0a1a2e 100%)",
+      fontFamily: "'Nunito', sans-serif",
+      color: "#fff",
+      position: "relative",
+      overflow: "hidden",
+    }}>
+      <StarBg />
+      {confetti.map(c => (
+        <div key={c.id} style={{
+          position: "fixed", left: `${c.x}%`, top: "-20px", zIndex: 999,
+          width: 10, height: 10, borderRadius: 2, background: c.color,
+          animation: `confetti ${c.dur}s ease-in ${c.delay}s forwards`,
+        }} />
+      ))}
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 700, margin: "0 auto", padding: "48px 20px 80px" }}>
+        <div style={{ textAlign: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 42, animation: "float 3s ease-in-out infinite" }}>🚪</div>
+          <h1 style={{
+            fontFamily: "'Fredoka One', cursive",
+            fontSize: "clamp(28px, 6vw, 48px)",
+            margin: 0, lineHeight: 1.1,
+            background: "linear-gradient(135deg, #D4A017, #fff, #D4A017)",
+            backgroundSize: "200% auto",
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+            animation: "shimmer 3s linear infinite",
+          }}>LEO'S DOOR</h1>
+          <p style={{ color: "#D4A017", fontWeight: 800, fontSize: 16, margin: "4px 0 24px", letterSpacing: 1 }}>
+            Build Your Own Book
+          </p>
+        </div>
+
+        {step !== "welcome" && step !== "done" && <ProgressDots step={step} />}
+
+        {step === "welcome" && (
+          <div style={{ textAlign: "center", animation: "pop 0.5s ease-out" }}>
+            <Card>
+              <div style={{ fontSize: 52, marginBottom: 8 }}>🌟</div>
+              <p style={{ fontSize: 18, lineHeight: 1.7, color: "rgba(255,255,255,0.85)", marginTop: 0 }}>
+                Just like Leo, <strong>you</strong> have a magical door.
+              </p>
+              <p style={{ fontSize: 17, lineHeight: 1.7, color: "rgba(255,255,255,0.75)" }}>
+                Tell us your name, pick your magical rooms, and choose your superpower.
+                We'll show you a preview of a <strong style={{ color: "#D4A017" }}>storybook made just for you</strong>.
+              </p>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 28 }}>
+                {["🐒 Jungle", "👑 Princess", "🚀 Space", "🍭 Candy Land", "🌍 Travel the World"].map(tag => (
+                  <span key={tag} style={{
+                    background: "rgba(212,160,23,0.15)", border: "1px solid rgba(212,160,23,0.4)",
+                    borderRadius: 50, padding: "6px 16px", fontSize: 14, color: "#D4A017"
+                  }}>{tag}</span>
+                ))}
+              </div>
+              <MagicBtn onClick={() => setStep("name")} big color="#D4A017">Open My Door!</MagicBtn>
+            </Card>
+          </div>
+        )}
+
+        {step === "name" && (
+          <div style={{ animation: "pop 0.4s ease-out" }}>
+            <Card>
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ fontSize: 52 }}>✏️</div>
+                <h2 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 28, color: "#D4A017", margin: "8px 0" }}>
+                  What's Your Name?
+                </h2>
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 16, margin: 0 }}>
+                  This is the name that will be in your book!
+                </p>
+              </div>
+              <div style={{ position: "relative", marginBottom: 28 }}>
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Type your name here..."
+                  maxLength={20}
+                  style={{
+                    width: "100%", boxSizing: "border-box",
+                    background: "rgba(255,255,255,0.08)",
+                    border: "2px solid rgba(212,160,23,0.5)",
+                    borderRadius: 16, padding: "16px 20px",
+                    fontSize: 26, fontFamily: "'Fredoka One', cursive",
+                    color: "#fff", outline: "none", textAlign: "center",
+                    letterSpacing: 2,
+                  }}
+                />
+                {name && (
+                  <div style={{ textAlign: "center", marginTop: 12, color: "#D4A017", fontSize: 15 }}>
+                    Hello, {name}! Your adventure awaits!
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <MagicBtn onClick={() => setStep("welcome")} color="#555">← Back</MagicBtn>
+                <MagicBtn onClick={() => setStep("rooms")} disabled={name.trim().length < 2}>
+                  Next: Pick Your Rooms! →
+                </MagicBtn>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {step === "rooms" && (
+          <div style={{ animation: "pop 0.4s ease-out" }}>
+            <Card>
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 48 }}>🗺️</div>
+                <h2 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 26, color: "#D4A017", margin: "8px 0" }}>
+                  Pick Your Magical Rooms!
+                </h2>
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 15, margin: 0 }}>
+                  Choose up to <strong style={{ color: "#D4A017" }}>6 worlds</strong> for your book — {selectedRooms.length}/6 chosen
+                </p>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10, marginBottom: 24 }}>
+                {ROOMS.map(room => {
+                  const sel = selectedRooms.includes(room.id);
+                  const maxed = selectedRooms.length >= 6 && !sel;
+                  return (
+                    <button key={room.id} onClick={() => !maxed && toggleRoom(room.id)} style={{
+                      background: sel ? `${room.color}cc` : "rgba(255,255,255,0.05)",
+                      border: sel ? `2px solid ${room.color}` : "2px solid rgba(255,255,255,0.1)",
+                      borderRadius: 16, padding: "14px 10px", cursor: maxed ? "not-allowed" : "pointer",
+                      textAlign: "center", transition: "all 0.2s", opacity: maxed ? 0.4 : 1,
+                      transform: sel ? "scale(1.03)" : "scale(1)",
+                      boxShadow: sel ? `0 4px 16px ${room.color}66` : "none",
+                    }}>
+                      <div style={{ fontSize: 28 }}>{room.emoji}</div>
+                      <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: 13, color: "#fff", marginTop: 4 }}>{room.label}</div>
+                      {sel && <div style={{ fontSize: 16, marginTop: 2 }}>✓</div>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <MagicBtn onClick={() => setStep("name")} color="#555">← Back</MagicBtn>
+                <MagicBtn onClick={() => setStep("power")} disabled={selectedRooms.length < 1}>
+                  Next: Choose Your Power! →
+                </MagicBtn>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {step === "power" && (
+          <div style={{ animation: "pop 0.4s ease-out" }}>
+            <Card>
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 52 }}>🪄</div>
+                <h2 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 26, color: "#D4A017", margin: "8px 0" }}>
+                  What's {name}'s Superpower?
+                </h2>
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 15, margin: 0 }}>
+                  Pick the one special gift that's all yours!
+                </p>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10, marginBottom: 24 }}>
+                {POWERS.map(pw => {
+                  const sel = power === pw.id;
+                  return (
+                    <button key={pw.id} onClick={() => setPower(pw.id)} style={{
+                      background: sel ? `${pw.color}cc` : "rgba(255,255,255,0.05)",
+                      border: sel ? `2px solid ${pw.color}` : "2px solid rgba(255,255,255,0.1)",
+                      borderRadius: 16, padding: "16px 10px", cursor: "pointer",
+                      textAlign: "center", transition: "all 0.2s",
+                      transform: sel ? "scale(1.06)" : "scale(1)",
+                      boxShadow: sel ? `0 4px 20px ${pw.color}66` : "none",
+                    }}>
+                      <div style={{ fontSize: 36 }}>{pw.emoji}</div>
+                      <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: 13, color: "#fff", marginTop: 4 }}>{pw.label}</div>
+                      {sel && <div style={{ fontSize: 16, marginTop: 4 }}>✓</div>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+                <MagicBtn onClick={() => setStep("rooms")} color="#555">← Back</MagicBtn>
+                <MagicBtn onClick={() => setStep("review")} disabled={!power} color="#6C3483">
+                  Preview My Book! →
+                </MagicBtn>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {step === "review" && (
+          <div style={{ animation: "pop 0.4s ease-out" }}>
+            <Card glow>
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ fontSize: 52 }}>📖</div>
+                <h2 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 28, color: "#D4A017", margin: "8px 0" }}>
+                  {name}'s Book Preview!
+                </h2>
+                <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, margin: 0 }}>
+                  Here's a sneak peek of your adventure...
+                </p>
+              </div>
+
+              <div style={{
+                background: "linear-gradient(135deg, #1a0a2e, #0a1a2e)",
+                borderRadius: 20, padding: "24px", marginBottom: 16,
+                border: "2px solid rgba(212,160,23,0.5)",
+                textAlign: "center",
+                animation: "doorGlow 2s ease-in-out infinite",
+              }}>
+                <div style={{ fontSize: 40 }}>🚪</div>
+                <div style={{ fontFamily: "'Fredoka One', cursive", fontSize: 26, color: "#D4A017" }}>{name}'s Door</div>
+                <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 14, marginTop: 6 }}>
+                  A magical adventure starring <strong style={{ color: "#fff" }}>{name}</strong>
+                </div>
+                <div style={{ marginTop: 10, fontSize: 20 }}>
+                  {selectedPowerData?.emoji} &nbsp;
+                  {selectedRoomData.slice(0, 4).map(r => r.emoji).join(" ")}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                {bookPreview.map((page, i) => (
+                  <div key={i} style={{
+                    background: `${page.room.color}22`,
+                    border: `1px solid ${page.room.color}55`,
+                    borderRadius: 14, padding: "14px 18px",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                      <span style={{ fontSize: 22 }}>{page.room.emoji}</span>
+                      <span style={{ fontFamily: "'Fredoka One', cursive", fontSize: 15, color: "#fff" }}>
+                        Page {page.pageNum}: {page.room.label}
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 14, color: "rgba(255,255,255,0.8)", lineHeight: 1.5 }}>{page.text}</p>
+                  </div>
+                ))}
+              </div>
+
+              {selectedPowerData && (
+                <div style={{
+                  background: `${selectedPowerData.color}22`,
+                  border: `1px solid ${selectedPowerData.color}55`,
+                  borderRadius: 14, padding: "14px 18px", marginBottom: 20, textAlign: "center",
+                }}>
+                  <span style={{ fontSize: 28 }}>{selectedPowerData.emoji}</span>
+                  <div style={{ fontFamily: "'Fredoka One', cursive", color: "#fff", fontSize: 15, marginTop: 4 }}>
+                    {name}'s Superpower: <span style={{ color: "#D4A017" }}>{selectedPowerData.label}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
+                    This power appears on every page of the adventure!
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                <MagicBtn onClick={() => setStep("power")} color="#555">← Edit</MagicBtn>
+                <MagicBtn onClick={goToCheckout} big color="#D4A017">Get This Book — {CONFIG.PRICE_DISPLAY}</MagicBtn>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {step === "checkout" && (
+          <div style={{ animation: "pop 0.4s ease-out" }}>
+            <Card glow>
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 48 }}>📦</div>
+                <h2 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 26, color: "#D4A017", margin: "8px 0" }}>
+                  Where should {name}'s book ship?
+                </h2>
+                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 14, margin: 0 }}>
+                  {CONFIG.PRICE_DISPLAY} — printed and shipped in 5-7 days
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <input placeholder="First name" value={shipping.firstName}
+                  onChange={e => setShipping({ ...shipping, firstName: e.target.value })}
+                  style={inputStyle} />
+                <input placeholder="Last name" value={shipping.lastName}
+                  onChange={e => setShipping({ ...shipping, lastName: e.target.value })}
+                  style={inputStyle} />
+              </div>
+              <input placeholder="Email" type="email" value={shipping.email}
+                onChange={e => setShipping({ ...shipping, email: e.target.value })}
+                style={{ ...inputStyle, width: "100%", marginBottom: 10 }} />
+              <input placeholder="Address line 1" value={shipping.addressLine1}
+                onChange={e => setShipping({ ...shipping, addressLine1: e.target.value })}
+                style={{ ...inputStyle, width: "100%", marginBottom: 10 }} />
+              <input placeholder="Address line 2 (optional)" value={shipping.addressLine2}
+                onChange={e => setShipping({ ...shipping, addressLine2: e.target.value })}
+                style={{ ...inputStyle, width: "100%", marginBottom: 10 }} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+                <input placeholder="City" value={shipping.city}
+                  onChange={e => setShipping({ ...shipping, city: e.target.value })}
+                  style={inputStyle} />
+                <input placeholder="State" value={shipping.state}
+                  onChange={e => setShipping({ ...shipping, state: e.target.value })}
+                  style={inputStyle} />
+                <input placeholder="ZIP" value={shipping.postCode}
+                  onChange={e => setShipping({ ...shipping, postCode: e.target.value })}
+                  style={inputStyle} />
+              </div>
+
+              <div style={{
+                background: "rgba(255,255,255,0.05)", borderRadius: 14, padding: 16, marginBottom: 16,
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}>
+                <div style={{ fontFamily: "'Fredoka One', cursive", color: "#D4A017", fontSize: 14, marginBottom: 10 }}>
+                  PAYMENT
+                </div>
+                {!clientSecret && (
+                  <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>Loading payment form...</p>
+                )}
+                <div ref={paymentDivRef}></div>
+              </div>
+
+              {orderStatus === "error" && (
+                <div style={{
+                  background: "rgba(192,57,43,0.2)", border: "1px solid rgba(192,57,43,0.5)",
+                  borderRadius: 12, padding: "12px 16px", marginBottom: 16, fontSize: 14, color: "#fff",
+                }}>
+                  {orderError}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                <MagicBtn onClick={() => setStep("review")} color="#555">← Back</MagicBtn>
+                <MagicBtn onClick={handlePay} big color="#D4A017" disabled={!clientSecret || orderStatus === "processing"}>
+                  {orderStatus === "processing" ? "Processing..." : `Pay ${CONFIG.PRICE_DISPLAY}`}
+                </MagicBtn>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {step === "done" && (
+          <div style={{ textAlign: "center", animation: "pop 0.5s ease-out" }}>
+            <Card glow>
+              <div style={{ fontSize: 64, animation: "float 2s ease-in-out infinite" }}>💌</div>
+              <h2 style={{ fontFamily: "'Fredoka One', cursive", fontSize: 30, color: "#D4A017", margin: "10px 0" }}>
+                {name}'s book is on its way!
+              </h2>
+              <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 17, lineHeight: 1.7 }}>
+                Your order is confirmed and <strong style={{ color: "#fff" }}>"{name}'s Door"</strong> is
+                being printed right now. A confirmation email is on its way to {shipping.email}.
+              </p>
+
+              {gelatoOrderId && (
+                <div style={{
+                  background: "rgba(212,160,23,0.1)", borderRadius: 16,
+                  padding: "16px 20px", marginBottom: 20, fontSize: 14, color: "rgba(255,255,255,0.8)",
+                }}>
+                  Order ID: <strong style={{ color: "#D4A017" }}>{gelatoOrderId}</strong>
+                </div>
+              )}
+
+              <div style={{
+                background: "rgba(212,160,23,0.1)", borderRadius: 16,
+                padding: "20px", marginBottom: 24, textAlign: "left"
+              }}>
+                <div style={{ fontFamily: "'Fredoka One', cursive", color: "#D4A017", fontSize: 15, marginBottom: 10 }}>
+                  YOUR BOOK INCLUDES:
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {selectedRoomData.map(room => (
+                    <div key={room.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
+                      <span style={{ fontSize: 20 }}>{room.emoji}</span>
+                      <span>A magical page in the <strong>{room.label}</strong></span>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15 }}>
+                    <span style={{ fontSize: 20 }}>{selectedPowerData?.emoji}</span>
+                    <span>Superpower: <strong>{selectedPowerData?.label}</strong> throughout</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                <MagicBtn onClick={() => window.location.reload()} color="#555">
+                  Make Another Book
+                </MagicBtn>
+              </div>
+
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginTop: 20 }}>
+                Wherever you are, your imagination can take you anywhere.
+              </p>
+            </Card>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
