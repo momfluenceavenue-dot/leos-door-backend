@@ -11,7 +11,14 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const cors = require('cors');
 const multer = require('multer');
 const nodemailer = require('nodemailer');
+const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -59,30 +66,20 @@ app.post('/create-payment-intent', async (req, res) => {
 // ═══════════════════════════════════════════════════════
 // ROUTE 2: UPLOAD PERSONALIZED PDF
 // Stores the generated PDF temporarily so Gelato can fetch it
-// Uses AWS S3 — or swap for Cloudinary free tier
+// Uses Cloudinary (free tier, no billing/card required)
 // ═══════════════════════════════════════════════════════
 app.post('/upload-pdf', upload.single('file'), async (req, res) => {
   try {
-    const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-    const s3 = new S3Client({
-      region: 'us-east-1',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      }
+    const b64 = Buffer.from(req.file.buffer).toString('base64');
+    const dataURI = `data:${req.file.mimetype};base64,${b64}`;
+
+    const result = await cloudinary.uploader.upload(dataURI, {
+      resource_type: 'raw',
+      folder: 'leos-door-books',
+      public_id: `book-${Date.now()}`,
     });
 
-    const filename = `books/${Date.now()}-${req.file.originalname}`;
-    await s3.send(new PutObjectCommand({
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: filename,
-      Body: req.file.buffer,
-      ContentType: 'application/pdf',
-      ACL: 'public-read', // Gelato needs public access to fetch the file
-    }));
-
-    const pdfUrl = `${process.env.PDF_STORAGE_BASE_URL}/${filename}`;
-    res.json({ pdfUrl });
+    res.json({ pdfUrl: result.secure_url });
   } catch (err) {
     console.error('PDF upload error:', err.message);
     res.status(500).json({ error: err.message });
