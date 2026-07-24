@@ -127,6 +127,7 @@ app.post('/submit-gelato-order', async (req, res) => {
       items: [{
         itemReferenceId: `${orderReferenceId}-BOOK`,
         productUid: process.env.GELATO_PRODUCT_UID,
+        pageCount: 24, // Leo's Door interior is a fixed 24-page book
         quantity: 1,
         files: [{
           type: 'default',
