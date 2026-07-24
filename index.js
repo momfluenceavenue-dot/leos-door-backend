@@ -50,7 +50,7 @@ PDF_STORAGE_BASE_URL = https://your-s3-bucket.s3.amazonaws.com
 AWS_ACCESS_KEY_ID = ... (for PDF hosting — or use Cloudinary free tier)
 AWS_SECRET_ACCESS_KEY = ...
 AWS_BUCKET_NAME = leos-door-pdfs
-EMAIL_USER = hello@leorsdoor.com
+EMAIL_USER = leosdoorbooks@gmail.com
 EMAIL_PASS = your-email-app-password
 WEBHOOK_SECRET = whsec_... (from Stripe dashboard)
 */
@@ -280,13 +280,13 @@ async function sendConfirmationEmail(shipping, childName, gelatoOrderId) {
             Every book we send carries her spirit into the hands of a child who needs it.
           </div>
           <div style="text-align:center;padding:16px 0;">
-            <a href="https://leorsdoor.com" style="background:#5B2C8D;color:white;text-decoration:none;padding:12px 28px;border-radius:50px;font-size:14px;">
-              Visit leorsdoor.com
+            <a href="https://leosdoor.com" style="background:#5B2C8D;color:white;text-decoration:none;padding:12px 28px;border-radius:50px;font-size:14px;">
+              Visit leosdoor.com
             </a>
           </div>
           <p style="text-align:center;font-size:12px;color:#999;margin-top:20px;">
-            Questions? Email us at hello@leorsdoor.com<br>
-            Leo's Door Books · leorsdoor.com
+            Questions? Email us at leosdoorbooks@gmail.com<br>
+            Leo's Door Books · leosdoor.com
           </p>
         </body>
         </html>
