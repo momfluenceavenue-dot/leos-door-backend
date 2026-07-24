@@ -25,6 +25,19 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
+// TEMPORARY DEBUG ROUTE — safe to leave in briefly, shows only a partial
+// masked view of the key actually loaded at runtime, never the full secret.
+// Remove this route once the key mismatch is confirmed fixed.
+app.get('/debug-key', (req, res) => {
+  const key = process.env.STRIPE_SECRET_KEY || '';
+  res.json({
+    keyPrefix: key.slice(0, 12),
+    keyLast4: key.slice(-4),
+    keyLength: key.length,
+    mode: key.startsWith('sk_test_') ? 'TEST' : key.startsWith('sk_live_') ? 'LIVE' : 'UNKNOWN',
+  });
+});
+
 // ═══════════════════════════════════════════════════════
 // ENV VARIABLES — set these in Vercel dashboard
 // or create a .env file locally
