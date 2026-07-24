@@ -31,7 +31,7 @@ app.use(express.json());
 app.get('/debug-key', (req, res) => {
   const key = process.env.STRIPE_SECRET_KEY || '';
   res.json({
-    keyPrefix: key.slice(0, 12),
+    keyPrefix: key.slice(0, 30),
     keyLast4: key.slice(-4),
     keyLength: key.length,
     mode: key.startsWith('sk_test_') ? 'TEST' : key.startsWith('sk_live_') ? 'LIVE' : 'UNKNOWN',
