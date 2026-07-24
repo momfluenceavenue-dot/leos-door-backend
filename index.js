@@ -114,6 +114,7 @@ app.post('/submit-gelato-order', async (req, res) => {
       rooms,
       power,
       pdfUrl,
+      pageCount,
       shippingAddress,
     } = req.body;
 
@@ -127,7 +128,7 @@ app.post('/submit-gelato-order', async (req, res) => {
       items: [{
         itemReferenceId: `${orderReferenceId}-BOOK`,
         productUid: process.env.GELATO_PRODUCT_UID,
-        pageCount: 24, // Leo's Door interior is a fixed 24-page book
+        pageCount: pageCount && pageCount >= 30 ? pageCount : 30, // Gelato's photobook minimum is 30 pages
         quantity: 1,
         files: [{
           type: 'default',
