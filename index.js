@@ -149,7 +149,7 @@ app.post('/submit-gelato-order', async (req, res) => {
         addressLine1: shippingAddress.addressLine1,
         addressLine2: shippingAddress.addressLine2 || '',
         city: shippingAddress.city,
-        state: shippingAddress.state,
+        state: (shippingAddress.state || '').trim().toUpperCase(),
         postCode: shippingAddress.postCode,
         country: shippingAddress.country,
         email: shippingAddress.email,
