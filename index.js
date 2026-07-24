@@ -89,7 +89,9 @@ app.post('/upload-pdf', upload.single('file'), async (req, res) => {
     const result = await cloudinary.uploader.upload(dataURI, {
       resource_type: 'raw',
       folder: 'leos-door-books',
-      public_id: `book-${Date.now()}`,
+      public_id: `book-${Date.now()}.pdf`,
+      use_filename: false,
+      unique_filename: false,
     });
 
     res.json({ pdfUrl: result.secure_url });
@@ -128,7 +130,7 @@ app.post('/submit-gelato-order', async (req, res) => {
       items: [{
         itemReferenceId: `${orderReferenceId}-BOOK`,
         productUid: process.env.GELATO_PRODUCT_UID,
-        pageCount: pageCount && pageCount >= 30 ? pageCount : 30, // Gelato's photobook minimum is 30 pages
+        pageCount: pageCount || 33, // This Gelato product requires exactly 33 pages
         quantity: 1,
         files: [{
           type: 'default',
