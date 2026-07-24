@@ -130,7 +130,7 @@ app.post('/submit-gelato-order', async (req, res) => {
       items: [{
         itemReferenceId: `${orderReferenceId}-BOOK`,
         productUid: process.env.GELATO_PRODUCT_UID,
-        pageCount: pageCount || 33, // This Gelato product requires exactly 33 pages
+        pageCount: pageCount || 34, // Even number, within this product's 30-200 page range
         quantity: 1,
         files: [{
           type: 'default',
