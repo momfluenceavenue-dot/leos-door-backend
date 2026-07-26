@@ -229,8 +229,17 @@ app.get('/debug-lulu-package', async (req, res) => {
   try {
     const accessToken = await getLuluAccessToken();
     const podPackageId = process.env.LULU_POD_PACKAGE_ID;
-    const dimsRes = await fetch(`${LULU_BASE_URL}/cover-dimensions/?pod_package_id=${podPackageId}&page_count=30&unit=pt`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+    const dimsRes = await fetch(`${LULU_BASE_URL}/cover-dimensions/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        pod_package_id: podPackageId,
+        interior_page_count: 30,
+        unit: 'pt',
+      }),
     });
     const dimsData = await dimsRes.json();
     res.json({
