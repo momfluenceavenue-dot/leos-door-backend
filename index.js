@@ -122,7 +122,130 @@ app.post('/upload-pdf', upload.single('file'), async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// ROUTE 3: SUBMIT GELATO ORDER
+// ROUTE 3B: SUBMIT LULU PRINT ORDER
+// Sends the cover + interior PDFs and shipping info to Lulu.
+// Lulu uses OAuth2 (client_key + client_secret) instead of a simple API key,
+// so we first fetch a temporary access token, then submit the print job.
+// ═══════════════════════════════════════════════════════
+
+const LULU_BASE_URL = process.env.LULU_USE_SANDBOX === 'true'
+  ? 'https://api.sandbox.lulu.com'
+  : 'https://api.lulu.com';
+
+async function getLuluAccessToken() {
+  const authUrl = process.env.LULU_USE_SANDBOX === 'true'
+    ? 'https://api.sandbox.lulu.com/auth/realms/glasstree/protocol/openid-connect/token'
+    : 'https://api.lulu.com/auth/realms/glasstree/protocol/openid-connect/token';
+
+  const basicAuth = Buffer.from(`${process.env.LULU_CLIENT_KEY}:${process.env.LULU_CLIENT_SECRET}`).toString('base64');
+
+  const res = await fetch(authUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${basicAuth}`,
+    },
+    body: 'grant_type=client_credentials',
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Lulu auth failed: ${errText}`);
+  }
+  const data = await res.json();
+  return data.access_token;
+}
+
+app.post('/submit-lulu-order', async (req, res) => {
+  try {
+    const {
+      orderReferenceId,
+      customerReferenceId,
+      childName,
+      rooms,
+      power,
+      pdfUrl,
+      coverUrl,
+      shippingAddress,
+    } = req.body;
+
+    const accessToken = await getLuluAccessToken();
+
+    const luluPayload = {
+      contact_email: process.env.EMAIL_USER,
+      external_id: orderReferenceId,
+      line_items: [{
+        external_id: `${orderReferenceId}-BOOK`,
+        printable_normalization: {
+          cover: { source_url: coverUrl },
+          interior: { source_url: pdfUrl },
+          pod_package_id: process.env.LULU_POD_PACKAGE_ID,
+        },
+        quantity: 1,
+        title: `${childName}'s Door`,
+      }],
+      shipping_address: {
+        name: `${shippingAddress.firstName} ${shippingAddress.lastName}`,
+        street1: shippingAddress.addressLine1,
+        street2: shippingAddress.addressLine2 || '',
+        city: shippingAddress.city,
+        state_code: (shippingAddress.state || '').trim().toUpperCase(),
+        postcode: shippingAddress.postCode,
+        country_code: shippingAddress.country || 'US',
+        phone_number: shippingAddress.phone || '0000000000',
+        email: shippingAddress.email,
+      },
+      shipping_level: 'MAIL',
+    };
+
+    const luluRes = await fetch(`${LULU_BASE_URL}/print-jobs/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(luluPayload),
+    });
+
+    if (!luluRes.ok) {
+      const errBody = await luluRes.text();
+      throw new Error(`Lulu API error: ${errBody}`);
+    }
+
+    const luluOrder = await luluRes.json();
+
+    await sendConfirmationEmail(shippingAddress, childName, luluOrder.id);
+
+    res.json({ luluOrderId: luluOrder.id, success: true });
+  } catch (err) {
+    console.error('Lulu error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// TEMPORARY DEBUG ROUTE — verifies your Lulu credentials and pod_package_id
+// actually work, before you rely on them for a real order.
+app.get('/debug-lulu-package', async (req, res) => {
+  try {
+    const accessToken = await getLuluAccessToken();
+    const podPackageId = process.env.LULU_POD_PACKAGE_ID;
+    const dimsRes = await fetch(`${LULU_BASE_URL}/cover-dimensions/?pod_package_id=${podPackageId}&page_count=30&unit=pt`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+    const dimsData = await dimsRes.json();
+    res.json({
+      podPackageId,
+      tokenReceived: !!accessToken,
+      coverDimensionsResponse: dimsData,
+      usingSandbox: process.env.LULU_USE_SANDBOX === 'true',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// ROUTE 3: SUBMIT GELATO ORDER (kept for reference / fallback)
 // Sends the print-ready PDF + shipping info to Gelato
 // Gelato prints, binds, and ships the book automatically
 // ═══════════════════════════════════════════════════════
@@ -136,9 +259,15 @@ app.post('/submit-gelato-order', async (req, res) => {
       rooms,
       power,
       pdfUrl,
+      coverUrl,
       pageCount,
       shippingAddress,
     } = req.body;
+
+    const files = [{ type: 'default', url: pdfUrl }];
+    if (coverUrl) {
+      files.push({ type: 'cover', url: coverUrl });
+    }
 
     const gelatoPayload = {
       orderType: 'order',
@@ -152,10 +281,7 @@ app.post('/submit-gelato-order', async (req, res) => {
         productUid: process.env.GELATO_PRODUCT_UID,
         pageCount: pageCount || 28, // Confirmed valid minimum via Gelato's own product API (validPageCounts)
         quantity: 1,
-        files: [{
-          type: 'default',
-          url: pdfUrl, // Your publicly accessible PDF URL
-        }],
+        files: files,
         // Custom metadata visible in Gelato dashboard
         metadata: [
           { key: 'childName', value: childName },
