@@ -150,7 +150,7 @@ app.post('/submit-gelato-order', async (req, res) => {
       items: [{
         itemReferenceId: `${orderReferenceId}-BOOK`,
         productUid: process.env.GELATO_PRODUCT_UID,
-        pageCount: pageCount || 37, // Gelato has explicitly confirmed this product requires exactly 37 pages
+        pageCount: pageCount || 28, // Confirmed valid minimum via Gelato's own product API (validPageCounts)
         quantity: 1,
         files: [{
           type: 'default',
