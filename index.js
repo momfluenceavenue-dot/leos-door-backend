@@ -38,6 +38,26 @@ app.get('/debug-key', (req, res) => {
   });
 });
 
+// TEMPORARY DEBUG ROUTE — asks Gelato directly what page counts are valid
+// for your exact product, instead of guessing from rejected orders.
+app.get('/debug-gelato-product', async (req, res) => {
+  try {
+    const productUid = process.env.GELATO_PRODUCT_UID;
+    const response = await fetch(`https://product.gelatoapis.com/v3/products/${productUid}`, {
+      headers: { 'X-API-KEY': process.env.GELATO_API_KEY },
+    });
+    const data = await response.json();
+    res.json({
+      productUid,
+      validPageCounts: data.validPageCounts || 'not returned by Gelato for this product',
+      productStatus: data.attributes ? data.attributes.ProductStatus : undefined,
+      raw: data,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════
 // ENV VARIABLES — set these in Vercel dashboard
 // or create a .env file locally
@@ -130,7 +150,7 @@ app.post('/submit-gelato-order', async (req, res) => {
       items: [{
         itemReferenceId: `${orderReferenceId}-BOOK`,
         productUid: process.env.GELATO_PRODUCT_UID,
-        pageCount: pageCount || 34, // Even number, within this product's 30-200 page range
+        pageCount: pageCount || 37, // Gelato has explicitly confirmed this product requires exactly 37 pages
         quantity: 1,
         files: [{
           type: 'default',
