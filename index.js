@@ -20,6 +20,39 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+
+// ═══════════════════════════════════════════════════════
+// ADDRESS CLEANUP — so printer address checks never reject an order
+// over capitalization/spacing (e.g. "1 berkman drive" or state "Ny").
+// ═══════════════════════════════════════════════════════
+const UPPER_TOKENS = new Set(['PO', 'NE', 'NW', 'SE', 'SW', 'APO', 'FPO', 'DPO', 'USA']);
+function cleanWord(word) {
+  const lower = word.toLowerCase();
+  if (UPPER_TOKENS.has(lower.toUpperCase())) return lower.toUpperCase();
+  if (/^\d+(st|nd|rd|th)$/.test(lower)) return lower;            // 3rd, 21st
+  if (/\d/.test(lower)) return lower.toUpperCase();              // 4b -> 4B, #12c -> #12C
+  let out = lower.replace(/(^|[-'’.\/])([a-z])/g, (m, sep, ch) => sep + ch.toUpperCase());
+  out = out.replace(/^Mc([a-z])/, (m, ch) => 'Mc' + ch.toUpperCase()); // McDonald
+  return out;
+}
+function cleanText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').split(' ').map(cleanWord).join(' ');
+}
+function cleanAddress(a = {}) {
+  return {
+    ...a,
+    firstName: cleanText(a.firstName),
+    lastName: cleanText(a.lastName),
+    addressLine1: cleanText(a.addressLine1),
+    addressLine2: cleanText(a.addressLine2),
+    city: cleanText(a.city),
+    state: String(a.state || '').trim().toUpperCase(),
+    postCode: String(a.postCode || '').trim(),
+    country: String(a.country || 'US').trim().toUpperCase(),
+    email: String(a.email || '').trim(),
+  };
+}
+
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 app.use(cors({ origin: '*' }));
@@ -166,8 +199,11 @@ app.post('/submit-lulu-order', async (req, res) => {
       power,
       pdfUrl,
       coverUrl,
-      shippingAddress,
+      shippingAddress: rawShippingAddress,
     } = req.body;
+
+    // Normalize capitalization/spacing so the printer's address check never rejects it
+    const shippingAddress = cleanAddress(rawShippingAddress);
 
     const accessToken = await getLuluAccessToken();
 
@@ -270,8 +306,9 @@ app.post('/submit-gelato-order', async (req, res) => {
       pdfUrl,
       coverUrl,
       pageCount,
-      shippingAddress,
+      shippingAddress: rawShippingAddress,
     } = req.body;
+    const shippingAddress = cleanAddress(rawShippingAddress);
 
     const files = [{ type: 'default', url: pdfUrl }];
     if (coverUrl) {
